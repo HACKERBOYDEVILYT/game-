@@ -7,9 +7,17 @@ export class SpatialAudioEngine {
   
   private isAmbienceRunning = false;
   private ambientInterval: number | null = null;
-  private heartbeatInterval: number | null = null;
   private ghostStaticNode: AudioBufferSourceNode | null = null;
   private ghostStaticGain: GainNode | null = null;
+
+  // Motorcycle 4-Stroke Engine Sound Nodes
+  private bikeEngineRunning = false;
+  private bikePistonOsc: OscillatorNode | null = null;
+  private bikeHarmonicOsc: OscillatorNode | null = null;
+  private bikeExhaustFilter: BiquadFilterNode | null = null;
+  private bikeEngineGain: GainNode | null = null;
+  private bikeThrottleNoise: AudioBufferSourceNode | null = null;
+  private bikeNoiseGain: GainNode | null = null;
 
   // Master volume settings
   private masterVol = 0.8;
@@ -43,6 +51,16 @@ export class SpatialAudioEngine {
       this.voiceGain.gain.setValueAtTime(this.voiceVol, this.ctx.currentTime);
       this.voiceGain.connect(this.masterGain);
 
+      // Auto-unlock Web Audio on first user touch/click/key
+      const unlockAudio = () => {
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      };
+      window.addEventListener('click', unlockAudio, { passive: true });
+      window.addEventListener('touchstart', unlockAudio, { passive: true });
+      window.addEventListener('keydown', unlockAudio, { passive: true });
+
       // Start continuous night room tone & wind
       this.startNightAmbience();
     } catch {
@@ -52,7 +70,7 @@ export class SpatialAudioEngine {
 
   public resume() {
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -320,69 +338,123 @@ export class SpatialAudioEngine {
     osc.stop(now + 0.22);
   }
 
-  // --- 3D SPATIAL SUPERNATURAL BENGALI FORMANT WHISPER ---
+  // --- 3D SPATIAL SUPERNATURAL BENGALI FORMANT WHISPER & GHOST CALL (ডাক দেওয়া) ---
   public playWhisper(direction: 'behind' | 'left' | 'right' | 'front', textBn: string) {
+    // 1. Bengali Speech Synthesis voice call if supported
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(textBn);
+        utter.lang = 'bn-BD';
+        utter.rate = 0.8;
+        utter.pitch = 0.55; // Deep supernatural pitch
+        utter.volume = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+        const bnVoice = voices.find(v => v.lang.includes('bn') || v.lang.includes('BD') || v.lang.includes('IN'));
+        if (bnVoice) utter.voice = bnVoice;
+        window.speechSynthesis.speak(utter);
+      } catch {
+        // Fallback to synthesizer
+      }
+    }
+
     if (!this.ctx || !this.voiceGain) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
     const now = this.ctx.currentTime;
 
     // Use Web Audio PannerNode with HRTF for spatial positioning
     const panner = this.ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
-    panner.refDistance = 1;
-    panner.maxDistance = 25;
+    panner.refDistance = 1.5;
+    panner.maxDistance = 30;
 
     if (direction === 'behind') {
       panner.positionX.setValueAtTime(0, now);
-      panner.positionY.setValueAtTime(0, now);
-      panner.positionZ.setValueAtTime(2.5, now); // behind player
+      panner.positionY.setValueAtTime(0.5, now);
+      panner.positionZ.setValueAtTime(2.2, now); // directly behind player
     } else if (direction === 'left') {
-      panner.positionX.setValueAtTime(-3, now);
+      panner.positionX.setValueAtTime(-3.5, now);
       panner.positionY.setValueAtTime(0.5, now);
       panner.positionZ.setValueAtTime(-1, now);
     } else if (direction === 'right') {
-      panner.positionX.setValueAtTime(3, now);
+      panner.positionX.setValueAtTime(3.5, now);
       panner.positionY.setValueAtTime(0.5, now);
       panner.positionZ.setValueAtTime(-1, now);
     } else {
       panner.positionX.setValueAtTime(0, now);
       panner.positionY.setValueAtTime(0.5, now);
-      panner.positionZ.setValueAtTime(-2, now);
+      panner.positionZ.setValueAtTime(-2.5, now);
     }
 
-    // Synthesize vocal formants over breathed noise
-    const duration = 1.4;
+    // 2. Chilling Eerie Vocal Synthesizer (Ghostly "Aaah... Ooh..." calling voice)
+    const duration = 2.2;
+
+    // Larynx fundamental oscillator with descending eerie pitch
+    const vocalOsc = this.ctx.createOscillator();
+    vocalOsc.type = 'triangle';
+    vocalOsc.frequency.setValueAtTime(175, now);
+    vocalOsc.frequency.exponentialRampToValueAtTime(130, now + 0.8);
+    vocalOsc.frequency.exponentialRampToValueAtTime(85, now + duration);
+
+    // Eerie vocal vibrato LFO
+    const vibrato = this.ctx.createOscillator();
+    const vibratoGain = this.ctx.createGain();
+    vibrato.frequency.setValueAtTime(5.5, now); // 5.5 Hz ghostly tremor
+    vibratoGain.gain.setValueAtTime(8, now);
+    vibrato.connect(vocalOsc.frequency);
+    vibrato.start(now);
+    vibrato.stop(now + duration);
+
+    // Vocal Tract Formant Filter 1 (Male/Specter chest vowel ~600Hz)
+    const formant1 = this.ctx.createBiquadFilter();
+    formant1.type = 'bandpass';
+    formant1.frequency.setValueAtTime(580, now);
+    formant1.Q.setValueAtTime(3.5, now);
+
+    // Vocal Tract Formant Filter 2 (Nasal / throat vowel ~1350Hz)
+    const formant2 = this.ctx.createBiquadFilter();
+    formant2.type = 'bandpass';
+    formant2.frequency.setValueAtTime(1380, now);
+    formant2.Q.setValueAtTime(4.0, now);
+
+    // Airy breath noise layer
     const noiseBuffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * duration), this.ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.35;
+      data[i] = (Math.random() * 2 - 1) * 0.45;
     }
-
     const noiseSource = this.ctx.createBufferSource();
     noiseSource.buffer = noiseBuffer;
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(1200, now);
+    noiseFilter.Q.setValueAtTime(2.0, now);
 
-    // Bengali vowel formant filter (F1 & F2 bandpass)
-    const formant1 = this.ctx.createBiquadFilter();
-    formant1.type = 'bandpass';
-    formant1.frequency.setValueAtTime(650, now);
-    formant1.Q.setValueAtTime(4.5, now);
+    // Output Gain Envelope (Loud & Audible)
+    const voiceMaster = this.ctx.createGain();
+    voiceMaster.gain.setValueAtTime(0, now);
+    voiceMaster.gain.linearRampToValueAtTime(0.75, now + 0.35); // Loud and clear!
+    voiceMaster.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-    const formant2 = this.ctx.createBiquadFilter();
-    formant2.type = 'bandpass';
-    formant2.frequency.setValueAtTime(1450, now);
-    formant2.Q.setValueAtTime(5.0, now);
+    // Connect vocal synth
+    vocalOsc.connect(formant1);
+    formant1.connect(voiceMaster);
 
-    const whisperGain = this.ctx.createGain();
-    whisperGain.gain.setValueAtTime(0, now);
-    whisperGain.gain.linearRampToValueAtTime(0.22, now + 0.3);
-    whisperGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    vocalOsc.connect(formant2);
+    formant2.connect(voiceMaster);
 
-    noiseSource.connect(formant1);
-    formant1.connect(formant2);
-    formant2.connect(whisperGain);
-    whisperGain.connect(panner);
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(voiceMaster);
+
+    voiceMaster.connect(panner);
     panner.connect(this.voiceGain);
 
+    vocalOsc.start(now);
+    vocalOsc.stop(now + duration);
     noiseSource.start(now);
   }
 
@@ -490,6 +562,133 @@ export class SpatialAudioEngine {
 
     const targetGain = proximityFactor > 0.1 ? Math.min(0.22, proximityFactor * 0.22) : 0;
     this.ghostStaticGain.gain.linearRampToValueAtTime(targetGain, this.ctx.currentTime + 0.1);
+  }
+
+  // --- MOTORCYCLE 4-STROKE ENGINE SOUND SYNTHESIZER ---
+  public startMotorcycleEngine() {
+    if (!this.ctx || !this.sfxGain || this.bikeEngineRunning) return;
+    this.resume();
+    this.bikeEngineRunning = true;
+    const now = this.ctx.currentTime;
+
+    // Starter kick crank burst
+    const crankOsc = this.ctx.createOscillator();
+    const crankGain = this.ctx.createGain();
+    crankOsc.type = 'sawtooth';
+    crankOsc.frequency.setValueAtTime(65, now);
+    crankOsc.frequency.exponentialRampToValueAtTime(15, now + 0.18);
+    crankGain.gain.setValueAtTime(0.25, now);
+    crankGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    crankOsc.connect(crankGain);
+    crankGain.connect(this.sfxGain);
+    crankOsc.start(now);
+    crankOsc.stop(now + 0.22);
+
+    // 1. Primary 4-Stroke Single Cylinder Piston Oscillator (Deep thumping rumble)
+    this.bikePistonOsc = this.ctx.createOscillator();
+    this.bikePistonOsc.type = 'sawtooth';
+    this.bikePistonOsc.frequency.setValueAtTime(24, now + 0.15); // 24 Hz idle pulse
+
+    // 2. Combustion Chamber Second Harmonic Oscillator
+    this.bikeHarmonicOsc = this.ctx.createOscillator();
+    this.bikeHarmonicOsc.type = 'triangle';
+    this.bikeHarmonicOsc.frequency.setValueAtTime(48, now + 0.15);
+
+    // 3. Exhaust Muffler Resonant Filter
+    this.bikeExhaustFilter = this.ctx.createBiquadFilter();
+    this.bikeExhaustFilter.type = 'lowpass';
+    this.bikeExhaustFilter.frequency.setValueAtTime(190, now + 0.15);
+    this.bikeExhaustFilter.Q.setValueAtTime(2.8, now + 0.15);
+
+    // 4. Engine Master Gain
+    this.bikeEngineGain = this.ctx.createGain();
+    this.bikeEngineGain.gain.setValueAtTime(0, now);
+    this.bikeEngineGain.gain.linearRampToValueAtTime(0.35, now + 0.35); // settles into steady idle
+
+    // 5. Air intake & exhaust flutter noise
+    const noiseBufferSize = this.ctx.sampleRate * 2;
+    const noiseBuf = this.ctx.createBuffer(1, noiseBufferSize, this.ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseBufferSize; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * 0.15;
+    }
+    this.bikeThrottleNoise = this.ctx.createBufferSource();
+    this.bikeThrottleNoise.buffer = noiseBuf;
+    this.bikeThrottleNoise.loop = true;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(450, now);
+    noiseFilter.Q.setValueAtTime(1.5, now);
+
+    this.bikeNoiseGain = this.ctx.createGain();
+    this.bikeNoiseGain.gain.setValueAtTime(0.04, now);
+
+    this.bikeThrottleNoise.connect(noiseFilter);
+    noiseFilter.connect(this.bikeNoiseGain);
+    this.bikeNoiseGain.connect(this.bikeEngineGain);
+
+    this.bikePistonOsc.connect(this.bikeExhaustFilter);
+    this.bikeHarmonicOsc.connect(this.bikeExhaustFilter);
+    this.bikeExhaustFilter.connect(this.bikeEngineGain);
+    this.bikeEngineGain.connect(this.sfxGain);
+
+    this.bikePistonOsc.start(now + 0.12);
+    this.bikeHarmonicOsc.start(now + 0.12);
+    this.bikeThrottleNoise.start(now + 0.12);
+  }
+
+  public updateMotorcycleEngine(throttle: number, speedRatio: number) {
+    if (!this.ctx || !this.bikeEngineRunning || !this.bikePistonOsc || !this.bikeHarmonicOsc || !this.bikeExhaustFilter || !this.bikeEngineGain) return;
+    const now = this.ctx.currentTime;
+
+    // RPM calculations: 23 Hz (idle) up to 80 Hz (revving full speed)
+    const clampedThrottle = Math.max(0, Math.min(1, throttle));
+    const clampedSpeed = Math.max(0, Math.min(1, speedRatio));
+
+    const targetFreq = 23 + (clampedThrottle * 32) + (clampedSpeed * 28);
+    const targetHarmonic = targetFreq * 2.0;
+    const targetFilterCutoff = 190 + (clampedThrottle * 420) + (clampedSpeed * 320);
+    const targetGain = 0.32 + (clampedThrottle * 0.18) + (clampedSpeed * 0.12);
+
+    this.bikePistonOsc.frequency.setTargetAtTime(targetFreq, now, 0.08);
+    this.bikeHarmonicOsc.frequency.setTargetAtTime(targetHarmonic, now, 0.08);
+    this.bikeExhaustFilter.frequency.setTargetAtTime(targetFilterCutoff, now, 0.09);
+    this.bikeEngineGain.gain.setTargetAtTime(targetGain, now, 0.08);
+
+    if (this.bikeNoiseGain) {
+      const noiseGainTarget = 0.04 + (clampedThrottle * 0.12);
+      this.bikeNoiseGain.gain.setTargetAtTime(noiseGainTarget, now, 0.08);
+    }
+  }
+
+  public stopMotorcycleEngine() {
+    if (!this.ctx || !this.bikeEngineRunning) return;
+    this.bikeEngineRunning = false;
+    const now = this.ctx.currentTime;
+
+    if (this.bikeEngineGain) {
+      this.bikeEngineGain.gain.linearRampToValueAtTime(0, now + 0.25);
+    }
+
+    setTimeout(() => {
+      try {
+        this.bikePistonOsc?.stop();
+        this.bikePistonOsc?.disconnect();
+        this.bikeHarmonicOsc?.stop();
+        this.bikeHarmonicOsc?.disconnect();
+        this.bikeThrottleNoise?.stop();
+        this.bikeThrottleNoise?.disconnect();
+      } catch {
+        // cleanup safety
+      }
+      this.bikePistonOsc = null;
+      this.bikeHarmonicOsc = null;
+      this.bikeExhaustFilter = null;
+      this.bikeEngineGain = null;
+      this.bikeThrottleNoise = null;
+      this.bikeNoiseGain = null;
+    }, 280);
   }
 
   public dispose() {

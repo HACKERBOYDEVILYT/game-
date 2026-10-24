@@ -163,11 +163,11 @@ export class GhostAIManager {
     const proximity = Math.max(0, 1 - dist / 22);
     audioManager.updateGhostProximityStatic(proximity);
 
-    // Whispers timer
+    // Whispers & supernatural calling voice timer (ডাক দেওয়ার শব্দ)
     this.whisperCooldown -= delta;
-    if (this.whisperCooldown <= 0 && dist < 18) {
+    if (this.whisperCooldown <= 0 && dist < 24) {
       this.triggerSupernaturalWhisper(facingDot);
-      this.whisperCooldown = 5.5 + Math.random() * 4.5;
+      this.whisperCooldown = 4.5 + Math.random() * 3.5;
     }
 
     // Floating subtle bob

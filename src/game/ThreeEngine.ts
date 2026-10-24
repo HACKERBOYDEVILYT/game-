@@ -19,6 +19,7 @@ export class ThreeEngine {
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private flashlight!: THREE.SpotLight;
+  private flashlightSpill!: THREE.PointLight;
   private flashlightTarget!: THREE.Object3D;
   private envBuilder: EnvironmentBuilder;
   private ghostAI!: GhostAIManager;
@@ -41,6 +42,7 @@ export class ThreeEngine {
 
   // Input states
   private keys: Record<string, boolean> = {};
+  private mobileSprint = false;
   public touchMove = { x: 0, y: 0 };
   public touchLook = { x: 0, y: 0 };
 
@@ -109,16 +111,16 @@ export class ThreeEngine {
     // 2. Scene & Atmospheric Fog
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x06080d);
-    this.scene.fog = new THREE.FogExp2(0x06080d, 0.045);
+    this.scene.fog = new THREE.FogExp2(0x06080d, 0.032); // Slightly clearer fog so torch beam reaches far
 
     // 3. Camera
-    this.camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 140);
     this.playerPos.set(this.level.playerSpawn.x, 1.65, this.level.playerSpawn.z);
     this.cameraYaw = this.level.playerSpawn.rotationY;
     this.camera.position.copy(this.playerPos);
 
-    // 4. Ambient & Moonlight Fill
-    const moonLight = new THREE.DirectionalLight(0x384a60, 0.45);
+    // 4. Ambient & Moonlight Fill (Clearer rural night illumination)
+    const moonLight = new THREE.DirectionalLight(0x4a6585, 0.7);
     moonLight.position.set(20, 45, 20);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.width = 1024;
@@ -126,19 +128,24 @@ export class ThreeEngine {
     moonLight.shadow.bias = -0.0005;
     this.scene.add(moonLight);
 
-    const hemiLight = new THREE.HemisphereLight(0x18202d, 0x0a0d12, 0.35);
+    const hemiLight = new THREE.HemisphereLight(0x28384d, 0x121720, 0.58);
     this.scene.add(hemiLight);
 
-    // 5. Flashlight (Handheld Spotlight attached to camera)
-    this.flashlight = new THREE.SpotLight(0xfff3db, 3.8, 30, Math.PI / 5.5, 0.4, 1.4);
+    // 5. Flashlight (Ultra-Bright High-Lumen Delivery Spotlight + Spill Light)
+    this.flashlight = new THREE.SpotLight(0xfffaea, 12.0, 75, Math.PI / 3.8, 0.45, 1.0);
     this.flashlight.position.copy(this.playerPos);
     this.flashlight.castShadow = true;
-    this.flashlight.shadow.bias = -0.0004;
+    this.flashlight.shadow.bias = -0.0003;
 
     this.flashlightTarget = new THREE.Object3D();
     this.scene.add(this.flashlightTarget);
     this.flashlight.target = this.flashlightTarget;
     this.scene.add(this.flashlight);
+
+    // Forward ambient spill light: illuminates the motorbike, ground, and immediate area
+    this.flashlightSpill = new THREE.PointLight(0xfff5e0, 2.8, 16, 1.2);
+    this.flashlightSpill.position.copy(this.playerPos);
+    this.scene.add(this.flashlightSpill);
 
     // 6. Build Level 3D Environment
     this.envBuilder.buildLevelEnvironment(this.level, this.scene);
@@ -199,7 +206,7 @@ export class ThreeEngine {
     }
 
     if (e.code === 'KeyC') {
-      this.stats.isCrouched = !this.stats.isCrouched;
+      this.toggleCrouch();
     }
 
     if (e.code === 'KeyE') {
@@ -221,6 +228,30 @@ export class ThreeEngine {
     this.callbacks.onStatsUpdate({ ...this.stats });
   }
 
+  public toggleCrouch() {
+    this.stats.isCrouched = !this.stats.isCrouched;
+    const isCr = this.stats.isCrouched;
+    this.callbacks.onSubtitle(
+      isCr ? 'নিচু হয়ে বসা (Sit Down / Crouched)' : 'সোজা হয়ে দাঁড়ানো (Sit Up / Standing)',
+      isCr ? 'Crouched / Sitting Down' : 'Standing Up'
+    );
+    this.callbacks.onStatsUpdate({ ...this.stats });
+  }
+
+  public setSprint(sprint: boolean) {
+    this.mobileSprint = sprint;
+    this.stats.isSprinting = sprint;
+    this.callbacks.onStatsUpdate({ ...this.stats });
+  }
+
+  public toggleSprint() {
+    this.setSprint(!this.mobileSprint);
+    this.callbacks.onSubtitle(
+      this.mobileSprint ? 'দৌড়ানো মোড চালু (Sprint / Run Enabled)' : 'স্বাভাবিক হাঁটার মোড (Walking Mode)',
+      this.mobileSprint ? 'Sprint / Run Enabled' : 'Normal Walk Mode'
+    );
+  }
+
   private onMouseMove = (e: MouseEvent) => {
     if (!this.isPointerLocked) return;
     const sensitivity = 0.0022;
@@ -239,10 +270,13 @@ export class ThreeEngine {
   public toggleFlashlight() {
     if (this.stats.battery <= 2) {
       this.stats.flashlightOn = false;
+      this.flashlight.visible = false;
+      if (this.flashlightSpill) this.flashlightSpill.visible = false;
       return;
     }
     this.stats.flashlightOn = !this.stats.flashlightOn;
     this.flashlight.visible = this.stats.flashlightOn;
+    if (this.flashlightSpill) this.flashlightSpill.visible = this.stats.flashlightOn;
     audioManager.playFlashlightClick(this.stats.flashlightOn);
   }
 
@@ -390,7 +424,8 @@ export class ThreeEngine {
     moveRight += this.touchMove.x;
 
     const isMoving = Math.abs(moveForward) > 0.05 || Math.abs(moveRight) > 0.05;
-    this.stats.isSprinting = !!(this.keys['ShiftLeft'] || this.keys['ShiftRight']) && isMoving;
+    const wantsSprint = !!(this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.mobileSprint);
+    this.stats.isSprinting = wantsSprint && isMoving;
 
     // Movement speed affected by sanity level!
     // As sanity drops, player becomes sluggish and stumbles
@@ -498,6 +533,11 @@ export class ThreeEngine {
       const forward = new THREE.Vector3(0, Math.sin(this.cameraPitch), -Math.cos(this.cameraPitch))
         .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.cameraYaw);
       this.flashlightTarget.position.copy(flPos).addScaledVector(forward, 15);
+    }
+
+    if (this.flashlightSpill) {
+      this.flashlightSpill.position.copy(this.flashlight.position);
+      this.flashlightSpill.visible = this.stats.flashlightOn;
     }
 
     if (this.stats.flashlightOn) {

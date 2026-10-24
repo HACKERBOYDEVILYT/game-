@@ -4,6 +4,7 @@ export interface CharacterAnimState {
   isMoving: boolean;
   isSprinting: boolean;
   isCrouched: boolean;
+  isMounted?: boolean;
   walkTimer: number;
   pitch: number;
   yaw: number;
@@ -364,19 +365,28 @@ export class PlayerCharacterModel {
       this.fpGroup.visible = true;
       this.tpGroup.visible = false;
 
-      // Animate 1st person hands
-      const speed = state.isSprinting ? 14 : 9;
-      const bobY = state.isMoving ? Math.sin(state.walkTimer * speed) * 0.025 : Math.sin(state.walkTimer * 2) * 0.005;
-      const bobX = state.isMoving ? Math.cos(state.walkTimer * (speed * 0.5)) * 0.015 : 0;
+      if (state.isMounted) {
+        // Motorcycle riding pose: both hands forward gripping handlebars
+        const engineVibe = Math.sin(Date.now() * 0.05) * 0.003;
+        this.fpRightArm.position.set(0.24, -0.28 + engineVibe, -0.38);
+        this.fpRightArm.rotation.set(-0.35, 0, -0.05);
+        this.fpLeftArm.position.set(-0.24, -0.28 + engineVibe, -0.38);
+        this.fpLeftArm.rotation.set(-0.35, 0, 0.05);
+      } else {
+        // Animate 1st person hands walking/sprinting
+        const speed = state.isSprinting ? 14 : 9;
+        const bobY = state.isMoving ? Math.sin(state.walkTimer * speed) * 0.025 : Math.sin(state.walkTimer * 2) * 0.005;
+        const bobX = state.isMoving ? Math.cos(state.walkTimer * (speed * 0.5)) * 0.015 : 0;
 
-      this.fpRightArm.position.y = -0.26 + bobY;
-      this.fpRightArm.position.x = 0.28 + bobX;
-      this.fpLeftArm.position.y = -0.28 + bobY * 0.8;
-      this.fpLeftArm.position.x = -0.28 - bobX * 0.8;
+        this.fpRightArm.position.y = -0.26 + bobY;
+        this.fpRightArm.position.x = 0.28 + bobX;
+        this.fpLeftArm.position.y = -0.28 + bobY * 0.8;
+        this.fpLeftArm.position.x = -0.28 - bobX * 0.8;
 
-      // Slight tilt with sprint
-      this.fpRightArm.rotation.z = state.isSprinting ? -0.1 : 0;
-      this.fpLeftArm.rotation.z = state.isSprinting ? 0.1 : 0;
+        // Slight tilt with sprint
+        this.fpRightArm.rotation.z = state.isSprinting ? -0.1 : 0;
+        this.fpLeftArm.rotation.z = state.isSprinting ? 0.1 : 0;
+      }
 
     } else {
       this.fpGroup.visible = false;
@@ -386,10 +396,27 @@ export class PlayerCharacterModel {
       // Torso facing
       this.tpGroup.rotation.y = state.yaw;
 
-      if (state.isMoving) {
+      if (state.isMounted) {
+        // Motorcycle rider seated posture
+        const engineVibe = Math.sin(Date.now() * 0.04) * 0.006;
+        this.tpTorso.position.y = 0.85 + engineVibe;
+        this.tpTorso.rotation.x = 0.22; // leaning slightly forward towards handlebars
+
+        // Legs bent forward onto bike footpegs
+        this.tpLeftLeg.rotation.x = -0.55;
+        this.tpRightLeg.rotation.x = -0.55;
+
+        // Arms reaching forward to handlebars
+        this.tpLeftArm.rotation.x = -1.1;
+        this.tpRightArm.rotation.x = -1.1;
+
+        // Head tracking forward
+        this.tpHead.rotation.x = state.pitch * 0.4;
+      } else if (state.isMoving) {
         const strideSpeed = state.isSprinting ? 13 : 8.5;
         const strideAngle = (state.isSprinting ? 0.55 : 0.38) * Math.sin(state.walkTimer * strideSpeed);
 
+        this.tpTorso.rotation.x = 0;
         // Legs alternate swing
         this.tpLeftLeg.rotation.x = strideAngle;
         this.tpRightLeg.rotation.x = -strideAngle;
@@ -402,7 +429,8 @@ export class PlayerCharacterModel {
         // Torso subtle vertical bob
         this.tpTorso.position.y = 1.05 + Math.abs(Math.sin(state.walkTimer * strideSpeed)) * 0.035;
       } else {
-        // Idle breathing
+        // Idle breathing on foot
+        this.tpTorso.rotation.x = 0;
         const idleBreath = Math.sin(state.walkTimer * 2.5) * 0.015;
         this.tpLeftLeg.rotation.x = THREE.MathUtils.damp(this.tpLeftLeg.rotation.x, 0, 8, delta);
         this.tpRightLeg.rotation.x = THREE.MathUtils.damp(this.tpRightLeg.rotation.x, 0, 8, delta);
@@ -412,10 +440,12 @@ export class PlayerCharacterModel {
       }
 
       // Head tracks pitch slightly
-      this.tpHead.rotation.x = state.pitch * 0.5;
+      if (!state.isMounted) {
+        this.tpHead.rotation.x = state.pitch * 0.5;
+      }
 
       // Crouch posture
-      if (state.isCrouched) {
+      if (state.isCrouched && !state.isMounted) {
         this.tpGroup.scale.set(1, 0.72, 1);
       } else {
         this.tpGroup.scale.set(1, 1, 1);

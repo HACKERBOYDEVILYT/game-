@@ -23,6 +23,12 @@ export interface TranslationDictionary {
   cinemaModeOpen: string;
   cinemaModeHide: string;
   journalBtn: string;
+  runBtn: string;
+  runBtnActive: string;
+  sitDownBtn: string;
+  sitUpBtn: string;
+  handBtn: string;
+  lookHint: string;
   pauseTitle: string;
   resumeGame: string;
   newGame: string;
@@ -112,6 +118,12 @@ export const TRANSLATIONS: Record<'bn' | 'en', TranslationDictionary> = {
     cinemaModeOpen: "কন্ট্রোল ডক খুলুন",
     cinemaModeHide: "সিনেমা মোড (লুকান)",
     journalBtn: "ডায়েরি ও ক্লু",
+    runBtn: "দৌড়ান",
+    runBtnActive: "দৌড়াচ্ছেন",
+    sitDownBtn: "বসুন (Sit Down)",
+    sitUpBtn: "উঠুন (Sit Up)",
+    handBtn: "হাত (Hand / Grab)",
+    lookHint: "স্ক্রিনে সোয়াইপ করে তাকান",
     pauseTitle: "খেলা স্থগিত (Paused)",
     resumeGame: "চালিয়ে যান (Resume)",
     newGame: "নতুন খেলা (New Game)",
@@ -199,6 +211,12 @@ export const TRANSLATIONS: Record<'bn' | 'en', TranslationDictionary> = {
     cinemaModeOpen: "Open Control Dock",
     cinemaModeHide: "Cinema Mode (Hide)",
     journalBtn: "Journal & Clues",
+    runBtn: "Run",
+    runBtnActive: "Running",
+    sitDownBtn: "Sit Down",
+    sitUpBtn: "Sit Up",
+    handBtn: "Hand / Grab",
+    lookHint: "Swipe right side to look",
     pauseTitle: "Game Paused",
     resumeGame: "Resume Game",
     newGame: "New Game",

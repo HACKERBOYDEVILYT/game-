@@ -60,6 +60,25 @@ export default function App() {
   const threeMountRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<ThreeEngine | null>(null);
 
+  // Landscape / Horizontal Mode Enforcement
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerHeight > window.innerWidth && window.innerWidth < 850;
+  });
+  const [allowPortraitOverride, setAllowPortraitOverride] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 850);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
   const t = TRANSLATIONS[settings.language] || TRANSLATIONS.bn;
   const isEn = settings.language === 'en';
 
@@ -246,6 +265,8 @@ export default function App() {
           subtitle={subtitle}
           onToggleFlashlight={() => engineRef.current?.toggleFlashlight()}
           onToggleCameraView={() => engineRef.current?.toggleCameraViewMode()}
+          onToggleSprint={() => engineRef.current?.toggleSprint()}
+          onToggleCrouch={() => engineRef.current?.toggleCrouch()}
           onInteract={() => engineRef.current?.handleInteraction()}
           onOpenJournal={() => setScreen('JOURNAL')}
           onPause={() => setScreen('PAUSED')}
@@ -357,6 +378,55 @@ export default function App() {
       {/* Credits & Folklore Screen */}
       {screen === 'CREDITS' && (
         <CreditsModal settings={settings} onClose={() => setScreen('MENU')} />
+      )}
+
+      {/* Horizontal / Landscape Mode Only Enforcer */}
+      {isPortrait && !allowPortraitOverride && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#06080d]/98 backdrop-blur-xl text-center select-none pointer-events-auto">
+          <div className="relative mb-6">
+            <div className="w-16 h-28 rounded-2xl border-4 border-amber-500/80 bg-slate-900/80 flex items-center justify-center shadow-2xl shadow-amber-500/30 animate-pulse">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            </div>
+            <div className="absolute -bottom-2 -right-2 text-2xl animate-spin">
+              🔄
+            </div>
+          </div>
+
+          <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest text-amber-400 bg-amber-950/70 border border-amber-600/40 mb-3">
+            Horizontal Mode Only (শুধুমাত্র আড়াআড়ি মোড)
+          </span>
+
+          <h2 className="text-xl sm:text-2xl font-black text-slate-100 mb-2">
+            ফোনটি আড়াআড়ি (Landscape) করুন
+          </h2>
+          
+          <p className="text-xs sm:text-sm text-slate-300 max-w-xs leading-relaxed mb-6">
+            রাত ৩টার ডেলিভারি গেমটি শুধুমাত্র হরিজন্টাল / ল্যান্ডস্কেপ মোডে চলবে। বাস্তবসম্মত ৩ডি অভিজ্ঞতা ও টাচ কন্ট্রোলের জন্য মোবাইলটি আড়াআড়ি ঘুরিয়ে নিন।
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+            <button
+              onClick={() => {
+                if (document.documentElement.requestFullscreen) {
+                  document.documentElement.requestFullscreen().catch(() => {});
+                }
+                const screenAny = screen as unknown as { orientation?: { lock?: (mode: string) => Promise<void> } };
+                if (screenAny.orientation?.lock) {
+                  screenAny.orientation.lock('landscape').catch(() => {});
+                }
+              }}
+              className="w-full py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              <span>🔄 ফুলস্ক্রিন ও ল্যান্ডস্কেপ করুন</span>
+            </button>
+            <button
+              onClick={() => setAllowPortraitOverride(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 text-[11px] font-medium transition-colors"
+            >
+              <span>ভার্টিক্যালে চালিয়ে যান (Continue)</span>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
